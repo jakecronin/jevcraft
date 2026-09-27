@@ -68,16 +68,30 @@ Stop the server with `docker compose stop`. Its world persists in ignored `serve
 Restart the bot with `npm run dev` after updating. Anyone on the server can address it in public chat:
 
 ```text
-Jev, grab me four oak logs please
-Hey Jev, what are you doing?
-Jev stop
+JevCraft, grab me four oak logs please
+Hey JevCraft, what are you doing?
+JevCraft stop
 ```
 
-Requests must start with `Jev`, `JevCraft`, or `Hey Jev`. Jev interprets the request and selects gameplay actions. Only addressed messages are sent to the configured TypeSafe API; unrelated chat is ignored. Addressed requests and interpreted results are recorded in local logs. Anyone may stop or query the bot; there is no owner restriction in this local prototype.
+Requests must start with the current conversational name (optionally preceded by `Hey`). Initially this is `MC_CHAT_NAME`, or your `MC_USERNAME` if unset. The terminal prints the active name at startup. Examples below assume the default `JevCraft`. Jev interprets the request and selects gameplay actions. Only addressed messages are sent to the configured TypeSafe API; unrelated chat is ignored. Addressed requests and interpreted results are recorded in local logs. Anyone may stop or query the bot; there is no owner restriction in this local prototype.
 
-Collection supports 1–64 additional oak logs, including quantities written as words. An unspecified quantity defaults to one. Targets must be within 12 blocks; the bot cannot find distant trees, collect other materials, or deliver inventory yet. It announces the interpreted quantity, completion, and failures. New collection requests are rejected while it is working. Exact `Jev stop`, `Jev cancel`, and `Jev pause` cancel immediately without an API call, even during interpretation; `Jev status` also works without an API call. Other phrasings use Jev. Natural-language interpretation is probabilistic; watch its acknowledgment and stop it if needed.
+Collection supports 1–64 additional oak logs, including quantities written as words. An unspecified quantity defaults to one. Targets must be within 12 blocks; the bot cannot find distant trees, collect other materials, or deliver inventory yet. It announces the interpreted quantity, completion, and failures. New collection requests are rejected while it is working. Exact `JevCraft stop`, `JevCraft cancel`, and `JevCraft pause` cancel immediately without an API call, even during interpretation; `JevCraft status` also works without an API call. Other phrasings use Jev. Natural-language interpretation is probabilistic; watch its acknowledgment and stop it if needed.
 
 Chat collection starts automatically. Terminal step mode remains available. Runs stop after a bounded action/time budget (scaled by quantity, at most ten minutes), and pause on execution errors.
+
+### Rename during play
+
+```text
+JevCraft, rename yourself Woody
+Woody, what is your name?
+Woody, grab me four oak logs
+Woody stop
+Woody, call yourself Sprout
+```
+
+Anyone can rename the bot, including while it works. The new name takes effect immediately for addressing, reply prefixes, help text, and model context. Old names stop matching. Names must start with a letter and contain 1–16 letters, digits or underscores. Renaming cancels any pending chat interpretation but does not interrupt an active collection task.
+
+The conversational name persists in ignored `.bot-state/name.json`. This does **not** change the Minecraft account username, chat sender label, or overhead name tag; those remain tied to the connected player. This preserves its inventory and connection. `MC_CHAT_NAME` is the initial fallback only; a saved name takes priority.
 
 ## Fast iteration
 

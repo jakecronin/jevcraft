@@ -1,9 +1,11 @@
 import { createInterface } from 'node:readline';
 import { mkdirSync, appendFileSync } from 'node:fs';
 import { addressed, interpret, ChatGate } from './chat.js';
+import { BotName, renameRequest } from './name.js';
 import { choose } from './core.js';
 import { connect, execute, logCount, observe, stop } from './minecraft.js';
 const bot = connect();
+const identity=new BotName(process.env.MC_CHAT_NAME ?? process.env.MC_USERNAME ?? 'JevCraft', '.bot-state/name.json');
 mkdirSync('logs',{recursive:true});
 const logfile = `logs/${new Date().toISOString().replaceAll(':','-')}.jsonl`;
 const record = (event: unknown) => appendFileSync(logfile,JSON.stringify({time:new Date().toISOString(),event})+'\n');
@@ -12,7 +14,7 @@ let controller: AbortController | undefined;
 let started=0, targetCount=1;
 let chatTask=false;
 const chatGate=new ChatGate();
-function reply(message: string) { if(ready) bot.chat(`[Jev] ${message.slice(0,220)}`); }
+function reply(message: string) { if(ready) bot.chat(`[${identity.value}] ${message.slice(0,220)}`); }
 function newTask(count=1) {
   baseline=logCount(bot); targetCount=count; steps=0; failures=0; started=0; lastResult='New task';automatic=false;
 }
@@ -50,32 +52,42 @@ async function step() {
   } finally { busy=false; controller=undefined; }
   if (ready && logCount(bot)-baseline>=targetCount) halt(`Complete: collected ${targetCount} additional oak log(s).`);
 }
-bot.on('spawn',()=>{ready=true; baseline=logCount(bot); steps=0; failures=0; started=0; console.log('Ready. Enter = one Jev-selected action; auto = continuous; stop; status; reset; quit.');});
+bot.on('spawn',()=>{ready=true; baseline=logCount(bot); steps=0; failures=0; started=0; console.log(`Chat name: ${identity.value}. Say "${identity.value}, rename yourself Woody".`); console.log('Ready. Enter = one Jev-selected action; auto = continuous; stop; status; reset; quit.');});
 bot.on('chat',(username,message)=>{
   if(username===bot.username || !ready) return;
-  const text=addressed(message);
+  const text=addressed(message,identity.value);
   if(!text) return;
+  const requestedName=renameRequest(text);
+  if(requestedName!==null) {
+    try {
+      const previous=identity.value; identity.rename(requestedName);chatGate.cancel();
+      record({type:'rename',username,previous,name:identity.value});
+      reply(`My name is now ${identity.value}. Address me as "${identity.value}". My Minecraft player name is still ${bot.username}.`);
+    } catch(error) { reply(error instanceof Error ? error.message : String(error)); }
+    return;
+  }
+  if(/^(?:what(?:'s| is) your name|who are you)[?.!]?$/i.test(text)) {reply(`I'm ${identity.value}.`);return;}
   // These explicit controls work even when Jev is unavailable or interpreting.
   if(/^(stop|cancel|pause)[.!]?$/i.test(text)) { const notified=chatTask;halt('Stopped by player.');if(!notified) reply('Stopped.');return; }
   if(/^status[?!]?$/i.test(text)) { reply(statusText()); return; }
   if(text.length>300) {reply('Please keep requests under 300 characters.');return;}
   const pending=chatGate.begin();
-  if(!pending) {reply('Still interpreting a request. Say "jev stop" to cancel.');return;}
+  if(!pending) {reply(`Still interpreting a request. Say "${identity.value} stop" to cancel.`);return;}
   void (async()=>{
     try {
-      const result=await interpret(text,pending.signal);pending.signal.throwIfAborted();
+      const result=await interpret(text,pending.signal,undefined,identity.value);pending.signal.throwIfAborted();
       record({type:'chat',username,text,...result});
       const request=result.request;
       if(request.intent==='stop') {const notified=chatTask;halt('Stopped by player.');if(!notified) reply('Stopped.');}
       else if(request.intent==='status') reply(statusText());
-      else if(request.intent==='unsupported') reply('I can gather 1-64 nearby oak logs, report progress, or stop. Try: Jev, get me four oak logs.');
-      else if(busy||automatic) reply('I am busy. Say "jev stop" before starting another collection.');
+      else if(request.intent==='unsupported') reply(`I can gather 1-64 nearby oak logs, report progress, stop, or rename myself. Try: ${identity.value}, get me four oak logs.`);
+      else if(busy||automatic) reply(`I am busy. Say "${identity.value} stop" before starting another collection.`);
       else {
         newTask(request.count); chatTask=true;
         if(!observe(bot,baseline,lastResult,targetCount).actions.some(a=>a.kind!=='wait')) {
           reply('No oak logs or oak-log drops within 12 blocks. Place some nearby and ask again.');chatTask=false;return;
         }
-        reply(`Collecting ${request.count} additional oak log(s). Say "jev stop" to cancel.`);
+        reply(`Collecting ${request.count} additional oak log(s). Say "${identity.value} stop" to cancel.`);
         automatic=true;void step();
       }
     } catch(error) {if(!pending.signal.aborted) reply(`Could not interpret request: ${error instanceof Error?error.message:String(error)}. No new task started.`);}

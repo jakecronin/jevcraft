@@ -8,3 +8,5 @@ server-data/
 .DS_Store
 
 backups/
+
+.bot-state/
