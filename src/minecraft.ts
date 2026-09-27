@@ -8,7 +8,7 @@ export function connect() {
   if (auth !== 'offline' && auth !== 'microsoft') throw new Error('MC_AUTH must be offline or microsoft');
   const bot = mineflayer.createBot({ host: process.env.MC_HOST ?? '127.0.0.1',
     port: Number(process.env.MC_PORT ?? 25565), username: process.env.MC_USERNAME ?? 'JevCraft',
-    version: process.env.MC_VERSION ?? '1.21.4', auth, profilesFolder: '.auth' });
+    version: process.env.MC_VERSION ?? '26.1', auth, profilesFolder: '.auth' });
   bot.loadPlugin(pathfinder);
   bot.on('spawn', () => {
     const moves = new Movements(bot);

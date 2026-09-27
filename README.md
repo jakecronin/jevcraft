@@ -2,7 +2,7 @@
 
 A local Minecraft companion with **Jev as its only model**. Built for learning together: observe the world, ask Jev to choose one bounded action, execute it, and inspect the result.
 
-**First task:** approach a nearby oak log, mine it, pick it up, and stop. This is an early starter, not a general survival assistant. Type checking, automated tests, and offline replay are validated; a live Minecraft + Jev end-to-end run is still required.
+**First task:** approach a nearby oak log, mine it, pick it up, and stop. This is an early starter, not a general survival assistant. Type checking, automated tests, and offline replay are validated; Minecraft 26.1 connection, chunk loading, inventory access, and pathfinder initialization have been verified locally. A live Jev-driven collection run is still required.
 
 ## Try the decision interface in two minutes
 
@@ -21,7 +21,7 @@ npm run check
 
 1. Copy `.env.example` to `.env`.
 2. Get a key from https://console.typesafe.ai and set `TYPESAFE_API_KEY` in `.env`.
-3. Start a Java Edition **1.21.4** server (see below).
+3. Start a Java Edition **26.1** server (see below).
 4. Join it with your normal Minecraft client at `localhost:25565`.
 5. Run `npm run dev` in a terminal and wait for `Ready`.
 6. Put an oak log nearby at ground level. Press Enter in the terminal to ask Jev and execute **one** action.
@@ -59,7 +59,7 @@ docker compose exec minecraft rcon-cli setblock 3 -60 0 minecraft:oak_log
 docker compose exec minecraft rcon-cli clear JevCraft minecraft:oak_log
 ```
 
-Then type `reset` in the bot terminal. These fixture commands assume the supplied new superflat world and default bot name. Reapply them between trials, with the bot stopped. The compose image tag tracks its Java 21 build; Minecraft itself is pinned. The server downloads Minecraft on first startup.
+Then type `reset` in the bot terminal. These fixture commands assume the supplied new superflat world and default bot name. Reapply them between trials, with the bot stopped. The compose image tag tracks its Java 25 build; Minecraft itself is pinned. The server downloads Minecraft on first startup.
 
 Stop the server with `docker compose stop`. Its world persists in ignored `server-data/`. You can also supply your own vanilla server; match its version and connection settings in `.env`.
 
@@ -96,7 +96,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for work areas and [the roadmap](docs/ROA
 
 ## Known limitations
 
-- No live Jev/Minecraft end-to-end verification yet; treat the first local run as an integration test.
+- Minecraft 26.1 connectivity is verified; live Jev-driven collection is not yet verified. Treat the first collection run as an integration test.
 - No combat, tool selection, crafting, general exploration, chat command authorization, or iron gathering yet.
 - Low-health protection stops the bot; it does not move it to safety.
 - npm audit currently reports six moderate dependency entries stemming from a transitive `uuid` advisory in Mineflayer's authentication chain. The suggested automatic fix downgrades Mineflayer to 1.4.0; it was not applied. Recheck upstream updates before broader deployment.
