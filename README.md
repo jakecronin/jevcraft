@@ -63,6 +63,22 @@ Then type `reset` in the bot terminal. These fixture commands assume the supplie
 
 Stop the server with `docker compose stop`. Its world persists in ignored `server-data/`. You can also supply your own vanilla server; match its version and connection settings in `.env`.
 
+## Talk to Jev in game
+
+Restart the bot with `npm run dev` after updating. Anyone on the server can address it in public chat:
+
+```text
+Jev, grab me four oak logs please
+Hey Jev, what are you doing?
+Jev stop
+```
+
+Requests must start with `Jev`, `JevCraft`, or `Hey Jev`. Jev interprets the request and selects gameplay actions. Only addressed messages are sent to the configured TypeSafe API; unrelated chat is ignored. Addressed requests and interpreted results are recorded in local logs. Anyone may stop or query the bot; there is no owner restriction in this local prototype.
+
+Collection supports 1–64 additional oak logs, including quantities written as words. An unspecified quantity defaults to one. Targets must be within 12 blocks; the bot cannot find distant trees, collect other materials, or deliver inventory yet. It announces the interpreted quantity, completion, and failures. New collection requests are rejected while it is working. Exact `Jev stop`, `Jev cancel`, and `Jev pause` cancel immediately without an API call, even during interpretation; `Jev status` also works without an API call. Other phrasings use Jev. Natural-language interpretation is probabilistic; watch its acknowledgment and stop it if needed.
+
+Chat collection starts automatically. Terminal step mode remains available. Runs stop after a bounded action/time budget (scaled by quantity, at most ten minutes), and pause on execution errors.
+
 ## Fast iteration
 
 - Edit TypeScript, stop/restart the bot, and keep your Minecraft client/server open.
@@ -97,7 +113,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for work areas and [the roadmap](docs/ROA
 ## Known limitations
 
 - Minecraft 26.1 connectivity is verified; live Jev-driven collection is not yet verified. Treat the first collection run as an integration test.
-- No combat, tool selection, crafting, general exploration, chat command authorization, or iron gathering yet.
+- No combat, tool selection, crafting, general exploration, owner-only chat permissions, or iron gathering yet.
 - Low-health protection stops the bot; it does not move it to safety.
 - npm audit currently reports six moderate dependency entries stemming from a transitive `uuid` advisory in Mineflayer's authentication chain. The suggested automatic fix downgrades Mineflayer to 1.4.0; it was not applied. Recheck upstream updates before broader deployment.
 

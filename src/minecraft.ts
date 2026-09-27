@@ -22,7 +22,7 @@ export function connect() {
 }
 export type Bot = ReturnType<typeof connect>;
 export function logCount(bot: Bot) { return bot.inventory.items().filter(i => i.name === 'oak_log').reduce((n,i) => n+i.count,0); }
-export function observe(bot: Bot, baseline: number, lastResult: string): Observation {
+export function observe(bot: Bot, baseline: number, lastResult: string, count = 1): Observation {
   const actions: Action[] = [
     { id: 'wait', kind: 'wait', description: 'Wait briefly for the world or drops to update' },
     { id: 'wait_longer', kind: 'wait', description: 'Wait briefly if no useful target is available' },
@@ -40,7 +40,7 @@ export function observe(bot: Bot, baseline: number, lastResult: string): Observa
     actions.push({ id: `collect_${entity.id}`, kind:'collect', entityId:entity.id,
       target:{x:entity.position.x,y:entity.position.y,z:entity.position.z}, description:`Pick up oak-log drop ${entity.id}` });
   }
-  return { objective: 'Collect one additional oak log, then stop', position: { x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z },
+  return { objective: `Collect ${count} additional oak logs, then stop`, position: { x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z },
     health:bot.health, inventory:Object.fromEntries(bot.inventory.items().map(i => [i.name, bot.inventory.items().filter(j=>j.name===i.name).reduce((n,j)=>n+j.count,0)])),
     gainedLogs:logCount(bot)-baseline, lastResult, actions };
 }

@@ -5,7 +5,8 @@
 - [ ] Replace the duplicate idle choices with richer inspect/stop semantics.
 - [ ] Add a preview-then-execute mode and a compact progress display.
 - [ ] Add a run summary: success, elapsed time, calls, token usage, failures.
-- [ ] Generalize collect-one-log to collect-N with inventory-based completion.
+- [x] Generalize collect-one-log to collect-N with inventory-based completion.
+- [x] Add natural-language chat requests for collection, status and stop; open to all players.
 - [ ] Add owner-authorized in-game commands using authenticated player identity.
 - [ ] Add tool requirements and a bounded exposed-iron fixture.
 - [ ] Consider Fabric autopilot only after the shared contracts have stabilized.
