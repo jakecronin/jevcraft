@@ -1,4 +1,5 @@
 import type { Action, Observation } from './core.js';
+import {constrainDrops,remainingDrops} from './drop-policy.js';
 import type { Audit } from './audit.js';
 export interface Adapter {
   observe():Observation;
@@ -25,7 +26,7 @@ export class Reactor {
   }
   snapshot() {
     this.lastObservation=this.adapter.observe();
-    return {...this.lastObservation,objective:this.task.text,requester:this.task.requester,initialInventory:this.initialInventory,history:this.history.slice(-12),lastResult:this.history.at(-1)?.result??'No actions yet'};
+    return constrainDrops(this.task.text,{...this.lastObservation,objective:this.task.text,requester:this.task.requester,initialInventory:this.initialInventory,history:this.history.slice(-12),lastResult:this.history.at(-1)?.result??'No actions yet'});
   }
   private safeObserve() {try {this.lastObservation=this.adapter.observe();} catch {} return this.lastObservation;}
   cancel(reason='Stopped by operator') {
@@ -51,7 +52,11 @@ export class Reactor {
       // Execute the original candidate, never arbitrary fields supplied by a model.
       action=state.actions.find(a=>a.id===action!.id)!;
       this.audit('decision',{actionId:action.id,action});
-      if(action.kind==='complete') {this.finish('complete','Model reports task complete; inspect the trace to verify the outcome.');return;}
+      if(action.kind==='complete') {
+        const remaining=remainingDrops(this.task.text,this.snapshot());
+        if(remaining!==null&&remaining>0)throw new Error(`Completion rejected: ${remaining} requested items remain in inventory`);
+        this.finish('complete',remaining===0?'Verified: none of the requested items remain in inventory.':'Model reports task complete; inspect the trace to verify the outcome.');return;
+      }
       if(action.kind==='blocked') {this.finish('blocked','Blocked: no available action can make useful progress. See trace for state and choices.');return;}
       if(action.kind==='clarify') {this.finish('clarification',action.description);return;}
       const signature=JSON.stringify({action:action.id,position:Object.values(state.position).map(v=>Math.round(v*2)/2),inventory:state.inventory});

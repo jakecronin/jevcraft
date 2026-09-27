@@ -30,6 +30,8 @@ Address the conversational name printed at startup (default `JevCraft`):
 
 ```text
 JevCraft, collect four oak logs
+JevCraft, drop all of your logs
+JevCraft, build a three-block-high pole with your logs
 JevCraft, come to me
 JevCraft, deposit your oak logs in the nearby chest
 JevCraft stop
@@ -41,14 +43,18 @@ Anyone on the server may control it. Only addressed requests become tasks; unrel
 
 - Approach nearby observed resource blocks, chests, or players.
 - Mine reachable, harvestable logs or ores using the currently held tool.
-- Pick up nearby dropped items; equip carried items.
-- Place the held block in a small set of adjacent ground-level positions.
+- Pick up nearby dropped items; equip carried items; toss carried stacks as loose item entities.
+- Place the held block at adjacent ground positions or extend reachable vertical columns (up to four blocks above current feet). Placement preserves at least one flat walkable exit.
 - Inspect a reachable chest; deposit **all carried items of one selected type** into it.
 - Wait, report blocked, ask a templated target/quantity question, or declare completion.
 
 Candidates are bounded (up to 240), with resource/drop searches within 12 blocks. Navigation does not dig or scaffold. There is no recipe executor, chest withdrawal, exact partial deposit, free-form geometry, house blueprint, or autonomous mine construction yet. High-level tasks outside these capabilities should cause Jev to report blocked or clarify; do not assume it can build a house because it accepts the text.
 
-Each step includes the last 12 action results. Jev determines completion, which is explicitly labeled **model-reported, not independently verified**. Primitive results check observable effects where feasible, but successful actions do not prove the whole task is complete.
+Dropping is different from placing: `drop all of your inventory`, `drop your logs`, and `drop your blocks` offer only matching stack-toss actions and control outcomes, never block placement. Completion for these explicit unquantified drop requests requires that no matching items remain in inventory. Exact partial-stack quantities are not implemented: use whole-stack/all-item requests for now. Each toss verifies inventory reduction; items can still be picked up again later by normal Minecraft behavior.
+
+Pole building uses one placement at a time, not a special autonomous build routine. Specify a height and supply enough logs. The first version supports adjacent reachable columns, not arbitrarily tall towers, scaffolding, or jumping and placing underfoot. It will not automatically dismantle blocks placed by earlier buggy runs.
+
+Each step includes the last 12 action results. For other tasks, Jev determines completion, which is explicitly labeled **model-reported, not independently verified**. Primitive results check observable effects where feasible, but successful actions do not prove the whole task is complete.
 
 ## Audit and interrupt
 
@@ -152,3 +158,5 @@ CI runs type checking, tests, and offline replay. Automated coverage includes in
 The dependency audit previously reported six moderate entries stemming from transitive `uuid` in Mineflayer authentication. The proposed automatic fix downgrades Mineflayer to 1.4.0 and was not applied.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [roadmap](docs/ROADMAP.md). References: [Mineflayer](https://github.com/PrismarineJS/mineflayer), [Jev API](https://docs.typesafe.ai/introduction/quickstart).
+
+Regression validation: synthetic live Jev checks select stack tossing for inventory disposal and upward placement for a partially built pole. Unit tests cover stale stacks, disposal constraints, completion eligibility, vertical candidates and blocking the last exit. These checks do not constitute a live in-world pole build.
