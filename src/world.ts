@@ -1,3 +1,4 @@
+import {inventoryReport} from './inventory-report.js';
 import { Vec3 } from 'vec3';
 import pf from 'mineflayer-pathfinder';
 import type { Action, Observation } from './core.js';
@@ -11,10 +12,11 @@ export function inventory(bot:Bot) {
   for(const item of bot.inventory.items()) items[item.name]=(items[item.name]??0)+item.count;
   return items;
 }
-export function worldAdapter(bot:Bot, getName:()=>string=()=>bot.username) {
+export function worldAdapter(bot:Bot, getName:()=>string=()=>bot.username, report:(message:string)=>void=()=>{}) {
   let chestMemory: {position:{x:number;y:number;z:number};items:Record<string,number>;observedAt:string}|undefined;
   function observe():Observation {
     const actions:Action[]=[
+      {id:'inventory',kind:'inventory',description:'Print a complete counted inventory report to chat'},
       {id:'wait',kind:'wait',description:'Wait briefly for world updates'},
       {id:'complete',kind:'complete',description:'Declare task complete only if its outcome has been observed'},
       {id:'blocked',kind:'blocked',description:'Report that no available action can accomplish the task'},
@@ -52,12 +54,13 @@ export function worldAdapter(bot:Bot, getName:()=>string=()=>bot.username) {
           actions.push({id:`place_${target.x}_${target.y}_${target.z}`,kind:'place',target:point(target),reference:point(support),itemName:held.name,description:`Place one held ${held.name} at ${target}: ${height===1?'start a column on the ground':`extend this vertical column to height ${height} above current ground`}. This creates a solid block, NOT a dropped item.`});
       }
     }
-    return {objective:'',position:point(pos),health:bot.health,inventory:inv,gainedLogs:0,lastResult:'',world:{botName:getName(),dimension:bot.game.dimension,blocks,players,heldItem:held?.name??null,inventoryBlockNames:Object.keys(inv).filter(name=>!!bot.registry.blocksByName[name]),placementSites:sites.map(s=>({position:point(s.target),height:s.height})),chestMemory:chestMemory??null,capabilities:'Bounded nearby movement, harvestable logs/ores, dropped items, equip, adjacent placement and reachable vertical column extensions up to four blocks above current feet, toss inventory stacks as loose items, inspect chest, deposit all of an item. No crafting, withdrawal, building blueprint, long-range exploration or autonomous mine construction.'},actions:actions.slice(0,240)};
+    return {objective:'',position:point(pos),health:bot.health,inventory:inv,gainedLogs:0,lastResult:'',world:{botName:getName(),yaw:bot.entity.yaw,dimension:bot.game.dimension,blocks,players,heldItem:held?.name??null,inventoryBlockNames:Object.keys(inv).filter(name=>!!bot.registry.blocksByName[name]),placementSites:sites.map(s=>({position:point(s.target),height:s.height})),chestMemory:chestMemory??null,capabilities:'Bounded nearby movement, harvestable logs/ores, dropped items, equip, adjacent placement and reachable vertical column extensions up to four blocks above current feet, toss inventory stacks as loose items, inspect chest, deposit all of an item. No crafting, withdrawal, building blueprint, long-range exploration or autonomous mine construction.'},actions:actions.slice(0,240)};
   }
   async function execute(a:Action,signal:AbortSignal) {
     signal.throwIfAborted();
     const abort=()=>stop(bot);signal.addEventListener('abort',abort,{once:true});
     try {
+      if(a.kind==='inventory') {for(const line of inventoryReport(inventory(bot)))report(line);return;}
       if(a.kind==='wait') {await new Promise(r=>setTimeout(r,500));signal.throwIfAborted();return;}
       if(a.kind==='equip') {
         const item=bot.inventory.items().find(i=>i.name===a.itemName);if(!item)throw new Error('Item no longer in inventory');
@@ -74,10 +77,10 @@ export function worldAdapter(bot:Bot, getName:()=>string=()=>bot.username) {
       }
       if(!a.target)throw new Error('Missing target');
       const p=vec(a.target);
-      if(p.distanceTo(bot.entity.position)>32)throw new Error('Target outside local execution range');
+      if(p.distanceTo(bot.entity.position)>96)throw new Error('Target outside local execution range');
       if(a.kind==='move') {
-        await bot.pathfinder.goto(new pf.goals.GoalNear(p.x,p.y,p.z,2));signal.throwIfAborted();
-        if(bot.entity.position.distanceTo(p)>4)throw new Error('Movement did not reach target');return;
+        await bot.pathfinder.goto(a.exact?new pf.goals.GoalBlock(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)):new pf.goals.GoalNear(p.x,p.y,p.z,2));signal.throwIfAborted();
+        if(bot.entity.position.distanceTo(p)>(a.exact?1.5:4))throw new Error('Movement did not reach target');return;
       }
       if(a.kind==='collect') {
         const e=bot.entities[a.entityId!];if(!e||e.getDroppedItem()?.name!==a.itemName)throw new Error('Drop changed or disappeared');

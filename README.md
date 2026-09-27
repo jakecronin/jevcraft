@@ -54,7 +54,7 @@ Dropping is different from placing: `drop all of your inventory`, `drop your log
 
 Pole building uses one placement at a time, not a special autonomous build routine. Specify a height and supply enough logs. The first version supports adjacent reachable columns, not arbitrarily tall towers, scaffolding, or jumping and placing underfoot. It will not automatically dismantle blocks placed by earlier buggy runs.
 
-Each step includes the last 12 action results. For other tasks, Jev determines completion, which is explicitly labeled **model-reported, not independently verified**. Primitive results check observable effects where feasible, but successful actions do not prove the whole task is complete.
+Each step includes the last 20 action results. For other tasks, Jev determines completion, which is explicitly labeled **model-reported, not independently verified**. Primitive results check observable effects where feasible, but successful actions do not prove the whole task is complete.
 
 ## Audit and interrupt
 
@@ -80,7 +80,7 @@ Every task has a unique `logs/<timestamp>-<run-id>.jsonl` file. Events are appen
 
 Stop aborts in-flight inference, clears movement/digging, closes an open inventory, and prevents a late response from executing. Completed blocks/transfers cannot be undone. The executor rejects another action while a cancelled operation is still settling. A stopped task needs a new request to start again.
 
-The loop also stops on a repeated action/state signature, 120 action attempts, a five-minute run budget, or low health. Each primitive has a 15-second timeout. Errors pause automatic execution; review before retrying. Repetition detection is heuristic, not a guarantee against every unproductive loop.
+The default budget is 600 actions and 20 minutes, with 45 seconds per primitive. Set `BOT_MAX_STEPS`, `BOT_RUN_MINUTES`, and `BOT_ACTION_SECONDS` in `.env` to change these. Failed actions trigger fresh observations, a two-second backoff, and a temporary candidate cooldown; five consecutive failures pause execution. Model/API failures pause immediately. Repeated no-progress choices get a cooldown so other options can be tried. A blocked choice gets up to three reconsiderations before ending the task. Low health still stops activity. All recovery decisions are recorded in the trace; stop remains immediate. This is bounded persistence, not an unlimited retry loop.
 
 ### Inspect the full chain
 
@@ -106,6 +106,19 @@ task collect one oak log
 ```
 
 Enter that in the **bot terminal**, then press Enter on an empty line to execute one model-selected action. `auto` enables repetition; `status` shows the task; `trace` prints the trace path; `reset` starts a fresh one-log task; `quit` disconnects. Step mode does not request an additional approval after selection.
+
+## Inventory and relative movement
+
+```text
+JevCraft, what's in your inventory?
+JevCraft, explain your inventory
+JevCraft, walk 10 blocks forward and then 20 blocks to the right
+JevCraft, step back
+```
+
+Inventory reports list every carried item type and its total quantity, splitting long reports across chat messages. Standard inventory questions work while another task is active, without replacing it. Use `inventory` in the terminal as well. The reactive action menu also offers inventory reporting for other task phrasing.
+
+Relative commands use the **bot's facing direction at task start**, not the player's. That coordinate frame stays fixed across every leg. Code computes ordered endpoints; Jev selects the next offered movement action. A leg completes only after reaching its destination cell (within about one block of the mathematical endpoint); the next leg is not offered early. Pathfinding may detour around obstacles, so this specifies relative destinations rather than a straight-line trajectory. Step back defaults to one block. Supported directions: forward, back/backward, left, right; distances: 1–64 per leg; up to eight legs. Digits and common number words are supported. Unrecognized phrasing falls back to the regular reactive menu; there is no promise it will understand every variant.
 
 ## Rename during play
 

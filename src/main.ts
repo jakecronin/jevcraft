@@ -5,9 +5,11 @@ import {choose} from './core.js';
 import {connect} from './minecraft.js';
 import {worldAdapter} from './world.js';
 import {Reactor} from './reactor.js';
+import {inventoryQuestion,inventoryReport} from './inventory-report.js';
+import {inventory} from './world.js';
 import {Trace} from './audit.js';
 const identity=new BotName(process.env.MC_CHAT_NAME??process.env.MC_USERNAME??'JevCraft','.bot-state/name.json');
-const bot=connect();const adapter=worldAdapter(bot,()=>identity.value);
+const bot=connect();const adapter=worldAdapter(bot,()=>identity.value,message=>reply(message));
 let ready=false;let runner:Reactor|undefined;let trace:Trace|undefined;
 const reply=(message:string)=>{console.log(message);if(ready)bot.chat(`[${identity.value}] ${message.slice(0,220)}`);};
 function start(text:string,requester:string,automatic:boolean) {
@@ -32,6 +34,7 @@ bot.on('chat',(username,message)=>{
   const text=addressed(message,identity.value);if(!text)return;
   if(/^(?:stop|cancel|pause|stop what you are doing|stop everything|please stop)[.!]?$/i.test(text)){interrupt(`Stopped by ${username}`);return;}
   if(/^(?:status|what are you doing|how is it going)[?!]?$/i.test(text)){status();return;}
+  if(inventoryQuestion(text)){const items=inventory(bot);trace?.emit('inventory.report',{requester:username,items});for(const line of inventoryReport(items))reply(line);return;}
   const name=renameRequest(text);
   if(name!==null){try{const previous=identity.value;identity.rename(name);trace?.emit('name.changed',{previous,name});reply(`My name is now ${name}. Minecraft username remains ${bot.username}.`);}catch(e){reply((e as Error).message);}return;}
   if(/^(?:what(?:'s| is) your name|who are you)[?.!]?$/i.test(text)){reply(`I'm ${identity.value}.`);return;}
@@ -42,6 +45,7 @@ rl.on('line',line=>{
   if(text==='stop'||text==='pause')interrupt('Stopped from terminal');
   else if(text==='quit'){interrupt('Exiting');bot.quit();clearInterval(timer);rl.close();}
   else if(text==='status')status();
+  else if(text==='inventory'){for(const line of inventoryReport(inventory(bot)))reply(line);}
   else if(text==='trace')console.log(trace?`Full chain: ${trace.path}\nRun npm run trace in another terminal.`:'No task trace yet.');
   else if(text.startsWith('task '))start(text.slice(5),'terminal',false);
   else if(text==='reset')start('Collect one additional oak log','terminal',false);
