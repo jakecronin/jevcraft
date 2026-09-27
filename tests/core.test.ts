@@ -25,3 +25,13 @@ test('cancellation releases a hung movement and clears controls',async()=>{
   await assert.rejects(pending,/cancelled/);
   assert.ok(cleared>0);
 });
+test('audit preserves rejected raw response and omits authorization',async()=>{
+ const previous=process.env.TYPESAFE_API_KEY;process.env.TYPESAFE_API_KEY='secret-fixture-value';
+ const events:unknown[]=[];
+ try {
+ await assert.rejects(choose(state,new AbortController().signal,async()=>Response.json({unexpected:'invalid payload'}),(type,data)=>events.push({type,data})));
+ const log=JSON.stringify(events);
+ assert.match(log,/model.request/);assert.match(log,/invalid payload/);assert.match(log,/model.error/);
+ assert.ok(!log.includes('secret-fixture-value'));assert.ok(!log.includes('Authorization'));
+ }finally{if(previous===undefined)delete process.env.TYPESAFE_API_KEY;else process.env.TYPESAFE_API_KEY=previous;}
+});

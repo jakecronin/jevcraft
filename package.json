@@ -11,7 +11,8 @@
     "check": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "demo": "node --import tsx src/replay.ts",
-    "replay": "node --import tsx --env-file=.env src/replay.ts --live"
+    "replay": "node --import tsx --env-file=.env src/replay.ts --live",
+    "trace": "node --import tsx src/trace.ts"
   },
   "dependencies": {
     "mineflayer": "4.39.0",

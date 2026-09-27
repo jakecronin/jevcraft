@@ -1,57 +1,128 @@
 # JevCraft
 
-A local Minecraft companion with **Jev as its only model**. Built for learning together: observe the world, ask Jev to choose one bounded action, execute it, and inspect the result.
+A local Minecraft companion using **Jev as its only AI model**. A reactive loop sends the player's task, observed game state, initial inventory, and recent results to Jev. Jev selects one concrete candidate action; the bot executes it, records the outcome, and observes again. There is no task graph or LLM planner.
 
-**First task:** approach a nearby oak log, mine it, pick it up, and stop. This is an early starter, not a general survival assistant. Type checking, automated tests, and offline replay are validated; Minecraft 26.1 connection, chunk loading, inventory access, and pathfinder initialization have been verified locally. A live Jev-driven collection run is still required.
+This is an experimental bounded-action assistant, not a fully capable survival or building agent. The loop and audit tooling are implemented. A live Minecraft 26.1 + Jev wait-and-complete smoke test passed; broader gameplay scenarios still need integration testing.
 
-## Try the decision interface in two minutes
+## Start
 
-Install Node.js 24, then:
+Use Node.js 24:
 
 ```sh
 npm ci
-npm run demo
-npm test
+cp .env.example .env  # first setup only; do not overwrite your existing key
 npm run check
+npm test
+npm run demo           # recorded fixture, no network or Minecraft required
 ```
 
-`demo` uses an explicitly labeled recorded response. It needs neither Minecraft nor an API key, does not make decisions itself, and never controls a player. Runtime gameplay always uses Jev; there is no fallback model or heuristic policy.
+Set your TypeSafe key in `.env`. Start Minecraft Java **26.1**, your local server, and then:
 
-## Run the bot locally
+```sh
+npm run dev
+```
 
-1. Copy `.env.example` to `.env`.
-2. Get a key from https://console.typesafe.ai and set `TYPESAFE_API_KEY` in `.env`.
-3. Start a Java Edition **26.1** server (see below).
-4. Join it with your normal Minecraft client at `localhost:25565`.
-5. Run `npm run dev` in a terminal and wait for `Ready`.
-6. Put an oak log nearby at ground level. Press Enter in the terminal to ask Jev and execute **one** action.
+Existing users only need to restart the bot for code changes. Docker does not need a restart.
 
-Terminal commands:
+## Give it a task
 
-| Command | Behavior |
-|---|---|
-| Enter | Ask Jev and execute one action |
-| `auto` | Repeat bounded actions; up to 30 actions / two minutes |
-| `stop` | Cancel the pending request/action and release controls |
-| `status` | Show lifecycle, task counters, and log location |
-| `reset` | Start a fresh one-log objective from current inventory; only when idle |
-| `quit` / Ctrl+C | Stop and disconnect |
+Address the conversational name printed at startup (default `JevCraft`):
 
-Step mode executes the selected action immediately after displaying it; it is not a separate approval screen. Any execution/API error pauses automatic mode. Three consecutive errors require reset. Low health, death, and disconnect cancel activity. Completion is measured against the inventory at task start.
+```text
+JevCraft, collect four oak logs
+JevCraft, come to me
+JevCraft, deposit your oak logs in the nearby chest
+JevCraft stop
+```
 
-### Optional local server using Docker
+Anyone on the server may control it. Only addressed requests become tasks; unrelated chat is ignored. Tasks and observed game state go to your configured TypeSafe API. There is no hardcoded intent classifier before the reactive policy. A new task is rejected while one is actively running. Specify targets explicitly: nearby player names, block types, or chest coordinates help. No conversation-level reference resolution or persistent world memory exists yet.
 
-Install and start Docker Desktop. Read the [Minecraft EULA](https://www.minecraft.net/eula); if you agree, run:
+### Available primitives
+
+- Approach nearby observed resource blocks, chests, or players.
+- Mine reachable, harvestable logs or ores using the currently held tool.
+- Pick up nearby dropped items; equip carried items.
+- Place the held block in a small set of adjacent ground-level positions.
+- Inspect a reachable chest; deposit **all carried items of one selected type** into it.
+- Wait, report blocked, ask a templated target/quantity question, or declare completion.
+
+Candidates are bounded (up to 240), with resource/drop searches within 12 blocks. Navigation does not dig or scaffold. There is no recipe executor, chest withdrawal, exact partial deposit, free-form geometry, house blueprint, or autonomous mine construction yet. High-level tasks outside these capabilities should cause Jev to report blocked or clarify; do not assume it can build a house because it accepts the text.
+
+Each step includes the last 12 action results. Jev determines completion, which is explicitly labeled **model-reported, not independently verified**. Primitive results check observable effects where feasible, but successful actions do not prove the whole task is complete.
+
+## Audit and interrupt
+
+The terminal streams timestamped, numbered events:
+
+```text
+model.request
+model.response
+decision mine_3_-60_0
+action.start mine_3_-60_0
+action.progress mine_3_-60_0 (1000ms)
+action.result mine_3_-60_0
+task.complete
+```
+
+Every task has a unique `logs/<timestamp>-<run-id>.jsonl` file. Events are appended immediately, so a crash preserves earlier records. Each model request is saved **before** sending; its exact body, raw response, HTTP status, duration and errors are saved with a matching call ID. Headers and API keys are never logged. Each action has start/progress/result events plus observed state, and every event has a sequence number and run ID. These records show inputs and outputs, not hidden model reasoning.
+
+### Stop immediately
+
+- In game: `<current name> stop` (also `cancel`, `pause`, `please stop`).
+- Bot terminal: `stop`.
+- Ctrl+C: stop and disconnect.
+
+Stop aborts in-flight inference, clears movement/digging, closes an open inventory, and prevents a late response from executing. Completed blocks/transfers cannot be undone. The executor rejects another action while a cancelled operation is still settling. A stopped task needs a new request to start again.
+
+The loop also stops on a repeated action/state signature, 120 action attempts, a five-minute run budget, or low health. Each primitive has a 15-second timeout. Errors pause automatic execution; review before retrying. Repetition detection is heuristic, not a guarantee against every unproductive loop.
+
+### Inspect the full chain
+
+In another terminal, from the project folder:
+
+```sh
+npm run trace
+```
+
+This exports the latest run to an HTML file and prints its full path. Open that file in a browser. Expand individual events or all events, and filter by action ID, error, event type or text. This is a snapshot; rerun the command to refresh it.
+
+```sh
+npm run trace -- logs/EXACT-RUN.jsonl          # export a specific run
+npm run trace -- logs/EXACT-RUN.jsonl --json   # pretty-print every event
+```
+
+For raw live updates, use `tail -f` on the trace path printed by the bot. Logs stay local and are Git-ignored; they include task text, player names, coordinates and inventory contents.
+
+### Step mode
+
+```text
+task collect one oak log
+```
+
+Enter that in the **bot terminal**, then press Enter on an empty line to execute one model-selected action. `auto` enables repetition; `status` shows the task; `trace` prints the trace path; `reset` starts a fresh one-log task; `quit` disconnects. Step mode does not request an additional approval after selection.
+
+## Rename during play
+
+```text
+JevCraft, rename yourself Woody
+Woody, what is your name?
+Woody, collect four oak logs
+```
+
+The name persists in `.bot-state/name.json`. It changes addressing and reply prefixes, not the Minecraft account or overhead label. `MC_CHAT_NAME` supplies an initial fallback, otherwise `MC_USERNAME` is used. Saved names take priority. Names use 1–16 letters/digits/underscores and start with a letter.
+
+## Local Minecraft server
+
+With Docker Desktop running, read the [Minecraft EULA](https://www.minecraft.net/eula). If you agree:
 
 ```sh
 MC_EULA=TRUE docker compose up -d
-# Wait for the server to finish starting:
 docker compose logs -f minecraft
 ```
 
-The included development server is bound to **127.0.0.1 only** and uses offline authentication. Do not expose this configuration to a network. Your brothers can each run their own local copy. For a shared authenticated server, use `MC_AUTH=microsoft` and a separate licensed bot account, and configure the server appropriately.
+Wait for `Done`, then join `localhost:25565` using Java Edition 26.1. The compose configuration uses Java 25, peaceful superflat survival, and persists the world under `server-data/`. Its offline-authentication port binds only to 127.0.0.1; do not expose this development configuration publicly. A shared authenticated server needs separate configuration and a licensed bot account using `MC_AUTH=microsoft`.
 
-Prepare a repeatable fixture after the bot joins:
+A resettable fixture (stop the bot's current task first):
 
 ```sh
 docker compose exec minecraft rcon-cli tp JevCraft 0 -60 0
@@ -59,76 +130,25 @@ docker compose exec minecraft rcon-cli setblock 3 -60 0 minecraft:oak_log
 docker compose exec minecraft rcon-cli clear JevCraft minecraft:oak_log
 ```
 
-Then type `reset` in the bot terminal. These fixture commands assume the supplied new superflat world and default bot name. Reapply them between trials, with the bot stopped. The compose image tag tracks its Java 25 build; Minecraft itself is pinned. The server downloads Minecraft on first startup.
+Use the bot's Minecraft username if different. These coordinates assume the supplied flat world. Then submit a new task; it snapshots initial inventory. `docker compose stop` stops the server while preserving the world.
 
-Stop the server with `docker compose stop`. Its world persists in ignored `server-data/`. You can also supply your own vanilla server; match its version and connection settings in `.env`.
+## Code map
 
-## Talk to Jev in game
+- `src/reactor.ts`: serial decision/execution loop, task context, interruption and budgets.
+- `src/core.ts`: typed candidates, Jev request, validation and API audit.
+- `src/world.ts`: concrete candidate generation and Minecraft primitive execution.
+- `src/audit.ts`, `src/trace.ts`: immediate JSONL recording and HTML inspection.
+- `src/main.ts`: chat/terminal controls and lifecycle.
+- `src/name.ts`: conversational identity persistence.
+- `src/chat.ts`: addressing helper; legacy intent parser retained for existing tests, unused by the reactive runner.
+- `src/minecraft.ts`: connection setup; legacy collection helpers retained for fixture compatibility.
 
-Restart the bot with `npm run dev` after updating. Anyone on the server can address it in public chat:
+No database or cloud backend is required. Active tasks exist only in memory and never auto-resume after restart. Minecraft owns world state; traces and the conversational name are local files. API/session secrets are Git-ignored.
 
-```text
-JevCraft, grab me four oak logs please
-Hey JevCraft, what are you doing?
-JevCraft stop
-```
+## Validation and limitations
 
-Requests must start with the current conversational name (optionally preceded by `Hey`). Initially this is `MC_CHAT_NAME`, or your `MC_USERNAME` if unset. The terminal prints the active name at startup. Examples below assume the default `JevCraft`. Jev interprets the request and selects gameplay actions. Only addressed messages are sent to the configured TypeSafe API; unrelated chat is ignored. Addressed requests and interpreted results are recorded in local logs. Anyone may stop or query the bot; there is no owner restriction in this local prototype.
+CI runs type checking, tests, and offline replay. Automated coverage includes interruption during inference/action execution, timeout, repetition detection, history, real-time progress, invalid responses, and logging without authorization headers. A live wait/completion loop was verified against Minecraft 26.1 and Jev. Mining, placement, chest transfers, and compound goals require further live scenario testing.
 
-Collection supports 1–64 additional oak logs, including quantities written as words. An unspecified quantity defaults to one. Targets must be within 12 blocks; the bot cannot find distant trees, collect other materials, or deliver inventory yet. It announces the interpreted quantity, completion, and failures. New collection requests are rejected while it is working. Exact `JevCraft stop`, `JevCraft cancel`, and `JevCraft pause` cancel immediately without an API call, even during interpretation; `JevCraft status` also works without an API call. Other phrasings use Jev. Natural-language interpretation is probabilistic; watch its acknowledgment and stop it if needed.
+The dependency audit previously reported six moderate entries stemming from transitive `uuid` in Mineflayer authentication. The proposed automatic fix downgrades Mineflayer to 1.4.0 and was not applied.
 
-Chat collection starts automatically. Terminal step mode remains available. Runs stop after a bounded action/time budget (scaled by quantity, at most ten minutes), and pause on execution errors.
-
-### Rename during play
-
-```text
-JevCraft, rename yourself Woody
-Woody, what is your name?
-Woody, grab me four oak logs
-Woody stop
-Woody, call yourself Sprout
-```
-
-Anyone can rename the bot, including while it works. The new name takes effect immediately for addressing, reply prefixes, help text, and model context. Old names stop matching. Names must start with a letter and contain 1–16 letters, digits or underscores. Renaming cancels any pending chat interpretation but does not interrupt an active collection task.
-
-The conversational name persists in ignored `.bot-state/name.json`. This does **not** change the Minecraft account username, chat sender label, or overhead name tag; those remain tied to the connected player. This preserves its inventory and connection. `MC_CHAT_NAME` is the initial fallback only; a saved name takes priority.
-
-## Fast iteration
-
-- Edit TypeScript, stop/restart the bot, and keep your Minecraft client/server open.
-- Start with step mode and a single reachable log. Examine `logs/*.jsonl` after failures.
-- `npm run replay` sends `fixtures/near-log.json` to live Jev without connecting to Minecraft (billable API call).
-- `npm run replay -- path/to/state.json` evaluates another observation matching the fixture schema. For a logged decision, save its `event.request.state` as that file.
-- Add recorded-state tests before expanding the action set.
-
-## Architecture and storage
-
-```text
-Mineflayer observation → plain typed state/actions → Jev choice
-        ↑                                               ↓
-        └──────── result + inventory ← bounded executor ─┘
-```
-
-- `src/core.ts`: library-independent state/action contracts and Jev HTTP adapter.
-- `src/minecraft.ts`: Mineflayer observations, target validation, pathfinding and execution.
-- `src/main.ts`: terminal controls, cancellation, run limits and logging.
-- `src/replay.ts`, `fixtures/`, `tests/`: offline and live policy experiments.
-
-Jev chooses the block/drop/location; pathfinder executes navigation. Navigation cannot dig or scaffold. Observations include nearby loaded blocks (not pixel vision), so this is a structured-state agent. The current candidate generator is limited to oak logs within 12 blocks; path feasibility is checked during execution. It does not explore for distant resources.
-
-No database or hosted backend is needed. Minecraft stores the world and inventory. The bot keeps its active task in memory, stores JSONL diagnostics locally, and starts idle after restart. `.env`, `.auth/`, `logs/`, and server worlds are excluded from Git. Logs contain game state and model responses, not API keys.
-
-A future Fabric autopilot can reuse the contracts, question design, and fixtures. Its observation/execution adapter will need new Java code. Sharing this TypeScript policy at runtime would require a local service; that is deliberately deferred.
-
-## Collaborating
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for work areas and [the roadmap](docs/ROADMAP.md) for small first issues. CI checks types, tests and the fixture demo on every push and pull request. Each developer supplies their own Jev key.
-
-## Known limitations
-
-- Minecraft 26.1 connectivity is verified; live Jev-driven collection is not yet verified. Treat the first collection run as an integration test.
-- No combat, tool selection, crafting, general exploration, owner-only chat permissions, or iron gathering yet.
-- Low-health protection stops the bot; it does not move it to safety.
-- npm audit currently reports six moderate dependency entries stemming from a transitive `uuid` advisory in Mineflayer's authentication chain. The suggested automatic fix downgrades Mineflayer to 1.4.0; it was not applied. Recheck upstream updates before broader deployment.
-
-References: [Mineflayer](https://github.com/PrismarineJS/mineflayer), [Pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder), [Jev API quickstart](https://docs.typesafe.ai/introduction/quickstart), [local server image](https://docker-minecraft-server.readthedocs.io/).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [roadmap](docs/ROADMAP.md). References: [Mineflayer](https://github.com/PrismarineJS/mineflayer), [Jev API](https://docs.typesafe.ai/introduction/quickstart).
