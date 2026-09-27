@@ -1,0 +1,16 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server:java21
+    ports:
+      - "127.0.0.1:25565:25565"
+    environment:
+      EULA: "${MC_EULA:-FALSE}"
+      VERSION: "1.21.4"
+      ONLINE_MODE: "FALSE"
+      MODE: survival
+      DIFFICULTY: peaceful
+      LEVEL_TYPE: minecraft:flat
+      SPAWN_PROTECTION: "0"
+      MEMORY: 2G
+    volumes:
+      - ./server-data:/data
